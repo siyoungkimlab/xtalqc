@@ -1,5 +1,6 @@
 """``xtalqc <system_id> <ligand_instance> [-o mates.cif]``
-``xtalqc [csv] in.csv out.csv [-j 8]``"""
+``xtalqc csv in.csv out.csv [-j 8]``
+``xtalqc extract prepped.mae <system_id> <ligand_instance> out.mae``"""
 
 from __future__ import annotations
 
@@ -11,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 
 from .crystal import Report, check, clean, symmates
+from .prep import extract
 from .rcsb import load
 from .rmsd import ligand_atoms
 from .rnp import asym_id, parse_system_id
@@ -65,12 +67,30 @@ def batch(argv) -> None:
           f"{bad} errors -> {a.output}", file=sys.stderr)
 
 
+def extract_cmd(argv) -> None:
+    p = argparse.ArgumentParser(prog="xtalqc extract", description="Cut a prepared MAE down to "
+                                "the receptor chains, ligand and protein-bound ions of a system")
+    p.add_argument("mae")
+    p.add_argument("system_id")
+    p.add_argument("ligand_instance")
+    p.add_argument("output")
+    p.add_argument("--ion-cutoff", type=float, default=3.0)
+    p.add_argument("--min-coordination", type=int, default=3,
+                   help="receptor N/O/S atoms within --ion-cutoff for an ion to be kept")
+    a = p.parse_args(argv)
+    res = extract(a.mae, a.system_id, a.ligand_instance, a.output, a.ion_cutoff,
+                  a.min_coordination)
+    print(json.dumps(asdict(res), indent=2))
+
+
 def main(argv=None) -> None:
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["csv"]:
         return batch(argv[1:])
-    if argv[:1] and argv[0].lower().endswith(".csv"):  # "xtalqc in.csv out.csv" works too
-        return batch(argv)
+    if argv[:1] == ["extract"]:
+        return extract_cmd(argv[1:])
+    if argv[:1] and argv[0].lower().endswith(".csv"):
+        sys.exit(f"{argv[0]} looks like a CSV: use 'xtalqc csv {' '.join(argv)}'")
     p = argparse.ArgumentParser(description="Crystal-environment QC of a Runs N' Poses ligand "
                                 "(or: xtalqc csv in.csv out.csv)")
     p.add_argument("system_id")

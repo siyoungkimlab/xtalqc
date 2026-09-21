@@ -67,3 +67,16 @@ def test_align_ignores_chain_names():
         one[0].remove_chain(name)
     one[0]["B"].name = "A"
     assert xq.ligand_rmsd(one, ref, "J", "J") == pytest.approx(0, abs=1e-6)
+
+
+@pytest.mark.skipif(not os.environ.get("XTALQC_NETWORK"), reason="needs RCSB")
+def test_extract(tmp_path):
+    st = xq.load("7x11")
+    for ch in st[0]:  # names in a prepared file need not follow the entry
+        ch.name = ch.name.lower()
+    xq.write_mae(tmp_path / "prepped.mae", st)
+    e = xq.extract(tmp_path / "prepped.mae", "7x11__1__1.D__1.P", "1.P", tmp_path / "out.mae")
+    assert (e.receptors, e.ligand, e.ions) == (["d"], "86I d/603", ["MN d/601"])
+    (out, _), = xq.read_mae(tmp_path / "out.mae")
+    assert {r.name for ch in out[0] for r in ch} >= {"86I", "MN"}
+    assert not any(r.is_water() or r.name == "NDP" for ch in out[0] for r in ch)

@@ -10,6 +10,7 @@ Crystal-structure QC for protein-ligand complexes, built on [gemmi](https://gemm
 - Symmetry-corrected ligand RMSD and pocket dRMSD, after aligning chains by sequence and position (chain names are ignored)
 - Crystal mates (like PyMOL `symexp` / ChimeraX `crystalcontacts`)
 - MAE read/write (atoms and bonds)
+- Cut a prepared MAE down to one system: receptor chains, the ligand and protein-bound ions
 
 ## Installation
 
@@ -27,7 +28,14 @@ xtalqc 7x11__1__1.D__1.P 1.P -o mates.cif
 
 # a CSV with system_id and ligand_instance (or ligand_instance_chain) -> adds qc_* columns
 xtalqc csv annotations.csv annotations_qc.csv -j 8
+
+# prepared MAE (e.g. Protein Preparation Wizard, crystal frame) -> receptor + ligand + bound ions
+xtalqc extract 7x11.prepped.mae 7x11__1__1.D__1.P 1.P 7x11_D_P.mae
 ```
+
+`extract` matches residues to the PDB entry by position, so renamed chains and residues are
+fine. An ion is kept when ≥3 receptor N/O/S atoms are within 3 Å. Bonds cut to dropped
+residues (e.g. glycans, inter-chain disulfides) are reported as `cut_bonds`.
 
 A ligand is `qc_clean` when nothing above is found. Ligands and ions anywhere in the entry are
 listed in `qc_all_other_ligands` and `qc_all_ions` for reference.

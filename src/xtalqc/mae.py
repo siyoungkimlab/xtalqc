@@ -68,9 +68,8 @@ def _block(toks, k):
     return out, _children(toks, k + len(keys), out)
 
 
-def read_mae(path) -> list[tuple[gemmi.Structure, list[tuple[int, int, int]]]]:
-    """One ``(structure, bonds)`` per ct; bonds are 0-based ``(i, j, order)``
-    over atoms in file order (the order ``structure[0].all()`` walks them)."""
+def read_cts(path) -> list[dict]:
+    """Raw cts: ``{key: value}`` properties plus ``m_atom``/``m_bond``/... as lists of row dicts."""
     with _open(path, "rt") as f:
         toks = [t for t in _TOKEN.findall(f.read()) if t[0] != "#"]
     out, k = [], 0
@@ -80,8 +79,36 @@ def read_mae(path) -> list[tuple[gemmi.Structure, list[tuple[int, int, int]]]]:
             name, k = toks[k], k + 1
         blk, k = _block(toks, k)
         if name in ("f_m_ct", "p_m_ct"):
-            out.append(_to_structure(blk))
+            out.append(blk)
     return out
+
+
+def write_cts(path, cts: list[dict]) -> None:
+    """Write raw cts: their properties, ``m_atom`` and ``m_bond`` (other blocks are dropped)."""
+    def fmt(v):
+        return "<>" if v is None else _q(v) if isinstance(v, str) else repr(v)
+
+    lines = ["{", "  s_m_m2io_version", "  :::", "  2.0.0", "}", ""]
+    for ct in cts:
+        props = {k: v for k, v in ct.items() if not isinstance(v, (list, dict))}
+        lines += ["f_m_ct {"] + [f"  {k}" for k in props] + ["  :::"]
+        lines += [f"  {fmt(v)}" for v in props.values()]
+        for name in ("m_atom", "m_bond"):
+            rows = ct.get(name, [])
+            cols = list(dict.fromkeys(c for r in rows for c in r))
+            lines += [f"  {name}[{len(rows)}] {{"] + [f"    {c}" for c in cols] + ["    :::"]
+            lines += [f"    {k} " + " ".join(fmt(r.get(c)) for c in cols)
+                      for k, r in enumerate(rows, 1)]
+            lines += ["    :::", "  }"]
+        lines += ["}", ""]
+    with _open(path, "wt") as f:
+        f.write("\n".join(lines))
+
+
+def read_mae(path) -> list[tuple[gemmi.Structure, list[tuple[int, int, int]]]]:
+    """One ``(structure, bonds)`` per ct; bonds are 0-based ``(i, j, order)``
+    over atoms in file order (the order ``structure[0].all()`` walks them)."""
+    return [_to_structure(ct) for ct in read_cts(path)]
 
 
 def _to_structure(ct):
