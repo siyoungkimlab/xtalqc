@@ -97,6 +97,8 @@ class Report:
     chain: str  # auth_asym_id
     resid: str  # auth_seq_id (+ insertion code)
     asym: str  # label_asym_id
+    receptor_residues: list[str] = field(default_factory=list)  # "<chain>:<modeled residues>"
+    receptor_seqres: list[str] = field(default_factory=list)  # "<chain>:<sequence length>"
     contact_chains: list[str] = field(default_factory=list)  # polymer chain copies within cutoff
     other_ligands: list[str] = field(default_factory=list)  # within cutoff, lattice copies too
     ions: list[str] = field(default_factory=list)  # within cutoff, lattice copies too
@@ -124,10 +126,13 @@ def check(system_id: str, ligand_instance: str, cutoff: float = 4.0,
     included), or an ion.  Waters and ``SOLVENTS`` are ignored.  Ligands and
     ions anywhere in the entry are listed in ``all_*`` for reference.
     ``validation`` also asks RCSB for the resolution and the ligand RSCC.
+    ``receptor_residues`` counts the modeled residues of each receptor chain of
+    the system, ``receptor_seqres`` its full deposited sequence.
     Labels are ``"<resname> <chain>/<resid> [<label_asym_id>]"``; lattice
     copies carry a ``_<op>_<a>_<b>_<c>`` suffix.
     """
-    pdb_id, asym = parse_system_id(system_id).pdb_id, asym_id(ligand_instance)
+    sid, asym = parse_system_id(system_id), asym_id(ligand_instance)
+    pdb_id = sid.pdb_id
     st = clean(_load(pdb_id), keep=asym)
     lig = ligand_atoms(st, asym)
     lig_ch, lig_res = next((ch, r) for ch in st[0] for r in ch if r.subchain == asym)
@@ -143,7 +148,14 @@ def check(system_id: str, ligand_instance: str, cutoff: float = 4.0,
             elif cra.residue.subchain != asym:
                 near.setdefault(cra.residue.subchain, (cra.chain, cra.residue))
     rep = Report(pdb_id, lig_res.name, lig_ch.name, str(lig_res.seqid).strip(), asym,
-                 sorted(chains))
+                 contact_chains=sorted(chains))
+    for rec in dict.fromkeys(asym_id(c) for c in sid.receptors):  # the system's chains
+        for ch in st[0]:
+            span = ch.get_subchain(rec)
+            if len(span):
+                ent = st.get_entity_of(span)
+                rep.receptor_residues.append(f"{ch.name}:{sum(1 for _ in span.first_conformer())}")
+                rep.receptor_seqres.append(f"{ch.name}:{len(ent.full_sequence) if ent else len(span)}")
     for ch, r in near.values():
         (rep.ions if _is_ion(r) else rep.other_ligands).append(_label(ch, r))
 
