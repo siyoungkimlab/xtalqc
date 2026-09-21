@@ -48,3 +48,7 @@ xq.drmsd(pred, st, "B", "P")                  # CA atoms within 6 Å of the liga
 (mae, bonds), = xq.read_mae("in.mae")
 xq.write_mae("out.mae", mae, bonds)
 ```
+
+## License
+
+MIT

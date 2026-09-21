@@ -1,11 +1,12 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "xtalqc"
 version = "0.1.0"
 description = "Small crystal-structure QC helpers for protein-ligand complexes, built on gemmi"
+license = "MIT"
 requires-python = ">=3.10"
 dependencies = ["gemmi>=0.7", "numpy", "networkx"]
 
