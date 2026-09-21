@@ -1,5 +1,5 @@
 """``xtalqc <system_id> <ligand_instance> [-o mates.cif]``
-``xtalqc csv in.csv out.csv [-j 8]``"""
+``xtalqc [csv] in.csv out.csv [-j 8]``"""
 
 from __future__ import annotations
 
@@ -27,24 +27,27 @@ def batch(argv) -> None:
                                 description="Add qc_* columns to a CSV of Runs N' Poses ligands")
     p.add_argument("input")
     p.add_argument("output")
-    p.add_argument("--system-col", default="system_id")
+    p.add_argument("--system-col", help="default: system_id (any case)")
     p.add_argument("--ligand-col", help="default: ligand_instance or ligand_instance_chain")
     p.add_argument("--cutoff", type=float, default=4.0)
     p.add_argument("--no-validation", action="store_true", help="skip RCSB resolution/RSCC")
     p.add_argument("-j", "--jobs", type=int, default=4, help="parallel downloads/checks")
     a = p.parse_args(argv)
-    with open(a.input, newline="") as f:
+    with open(a.input, newline="", encoding="utf-8-sig") as f:  # tolerate Excel BOMs
         reader = csv.DictReader(f)
         rows, fields = list(reader), list(reader.fieldnames or [])
-    lcol = a.ligand_col or next((c for c in ("ligand_instance", "ligand_instance_chain")
-                                 if c in fields), "ligand_instance")
-    for c in (a.system_col, lcol):
-        if c not in fields:
-            sys.exit(f"{a.input}: no column {c!r}")
+    def find(given, names):
+        col = given or next((f for n in names for f in fields if f.lower() == n), names[0])
+        if col not in fields:
+            sys.exit(f"{a.input}: no column {col!r} (have {', '.join(fields)})")
+        return col
+
+    scol = find(a.system_col, ["system_id"])
+    lcol = find(a.ligand_col, ["ligand_instance", "ligand_instance_chain"])
 
     def run(row):
         try:
-            return _row(check(row[a.system_col], row[lcol], a.cutoff,
+            return _row(check(row[scol], row[lcol], a.cutoff,
                               validation=not a.no_validation))
         except Exception as e:  # noqa: BLE001 -- one bad entry should not stop the table
             return {"qc_error": f"{type(e).__name__}: {e}"}
@@ -66,6 +69,8 @@ def main(argv=None) -> None:
     argv = sys.argv[1:] if argv is None else argv
     if argv[:1] == ["csv"]:
         return batch(argv[1:])
+    if argv[:1] and argv[0].lower().endswith(".csv"):  # "xtalqc in.csv out.csv" works too
+        return batch(argv)
     p = argparse.ArgumentParser(description="Crystal-environment QC of a Runs N' Poses ligand "
                                 "(or: xtalqc csv in.csv out.csv)")
     p.add_argument("system_id")

@@ -2,10 +2,10 @@
 
 Crystal-structure QC for protein-ligand complexes, built on [gemmi](https://gemmi.readthedocs.io).
 
-- Checks the crystal environment of a [Runs N' Poses](https://github.com/plinder-org/runs-n-poses) ligand: builds crystal mates, drops waters and crystallization additives, and flags ligands that are
-  - sandwiched (more than one protein chain copy within 4 Å, including lattice neighbours),
-  - accompanied by other ligands,
-  - in an entry with ions.
+- Checks the crystal environment of a [Runs N' Poses](https://github.com/plinder-org/runs-n-poses) ligand: builds crystal mates, drops waters and crystallization additives, and flags a ligand that has, within 4 Å (lattice neighbours included),
+  - more than one protein chain copy (sandwiched),
+  - another ligand,
+  - an ion.
 - Resolution and ligand RSCC from RCSB
 - Symmetry-corrected ligand RMSD and pocket dRMSD, after aligning chains by sequence and position (chain names are ignored)
 - Crystal mates (like PyMOL `symexp` / ChimeraX `crystalcontacts`)
@@ -29,7 +29,8 @@ xtalqc 7x11__1__1.D__1.P 1.P -o mates.cif
 xtalqc csv annotations.csv annotations_qc.csv -j 8
 ```
 
-A ligand is `qc_clean` when it is not sandwiched, has no other ligands, and there are no ions.
+A ligand is `qc_clean` when nothing above is found. Ligands and ions anywhere in the entry are
+listed in `qc_all_other_ligands` and `qc_all_ions` for reference.
 
 ## Python
 

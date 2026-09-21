@@ -98,8 +98,10 @@ class Report:
     resid: str  # auth_seq_id (+ insertion code)
     asym: str  # label_asym_id
     contact_chains: list[str] = field(default_factory=list)  # polymer chain copies within cutoff
-    other_ligands: list[str] = field(default_factory=list)  # "<resname> <chain>/<resid> [<asym>]"
-    ions: list[str] = field(default_factory=list)
+    other_ligands: list[str] = field(default_factory=list)  # within cutoff, lattice copies too
+    ions: list[str] = field(default_factory=list)  # within cutoff, lattice copies too
+    all_other_ligands: list[str] = field(default_factory=list)  # anywhere in the entry
+    all_ions: list[str] = field(default_factory=list)
     resolution: float | None = None
     rscc: float | None = None
 
@@ -116,11 +118,14 @@ def check(system_id: str, ligand_instance: str, cutoff: float = 4.0,
           validation: bool = True) -> Report:
     """Crystal-environment QC of a Runs N' Poses ligand.
 
-    Fails (``clean`` False) if more than one polymer chain copy -- in the
-    asymmetric unit or a neighbouring lattice copy -- lies within ``cutoff`` A
-    of the ligand, if the entry has other ligands, or if it has ions.
-    Waters and ``SOLVENTS`` are ignored.  ``validation`` also asks RCSB for the
-    resolution and the ligand RSCC.
+    Fails (``clean`` False) if, within ``cutoff`` A of the ligand -- counting
+    the asymmetric unit and neighbouring lattice copies -- there is more than
+    one polymer chain copy, another ligand (a lattice copy of the ligand
+    included), or an ion.  Waters and ``SOLVENTS`` are ignored.  Ligands and
+    ions anywhere in the entry are listed in ``all_*`` for reference.
+    ``validation`` also asks RCSB for the resolution and the ligand RSCC.
+    Labels are ``"<resname> <chain>/<resid> [<label_asym_id>]"``; lattice
+    copies carry a ``_<op>_<a>_<b>_<c>`` suffix.
     """
     pdb_id, asym = parse_system_id(system_id).pdb_id, asym_id(ligand_instance)
     st = clean(_load(pdb_id), keep=asym)
@@ -129,23 +134,26 @@ def check(system_id: str, ligand_instance: str, cutoff: float = 4.0,
     mates = symmates(st, cutoff + 1.0, around=lig)
 
     ns = gemmi.NeighborSearch(mates[0], gemmi.UnitCell(), cutoff + 1.0).populate()
-    chains = set()
+    chains, near = set(), {}
     for a in lig:
         for mk in ns.find_atoms(a.pos, "\0", radius=cutoff):
             cra = mk.to_cra(mates[0])
             if cra.residue.entity_type == gemmi.EntityType.Polymer:
                 chains.add(cra.chain.name)
+            elif cra.residue.subchain != asym:
+                near.setdefault(cra.residue.subchain, (cra.chain, cra.residue))
+    rep = Report(pdb_id, lig_res.name, lig_ch.name, str(lig_res.seqid).strip(), asym,
+                 sorted(chains))
+    for ch, r in near.values():
+        (rep.ions if _is_ion(r) else rep.other_ligands).append(_label(ch, r))
 
-    others, ions, seen = [], [], {asym}
+    seen = {asym}
     for ch in st[0]:
         for r in ch:
             if r.entity_type == gemmi.EntityType.Polymer or r.subchain in seen:
                 continue
             seen.add(r.subchain)  # one entry per molecule (first residue of a glycan)
-            (ions if _is_ion(r) else others).append(_label(ch, r))
-
-    rep = Report(pdb_id, lig_res.name, lig_ch.name, str(lig_res.seqid).strip(), asym,
-                 sorted(chains), others, ions)
+            (rep.all_ions if _is_ion(r) else rep.all_other_ligands).append(_label(ch, r))
     if validation:
         rep.resolution, rep.rscc = rcsb.resolution(pdb_id), rcsb.rscc(pdb_id, asym)
     return rep

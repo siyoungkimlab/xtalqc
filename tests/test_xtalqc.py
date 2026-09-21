@@ -51,7 +51,8 @@ def test_check_7x11():
     rep = xq.check("7x11__1__1.D__1.P", "1.P")
     assert (rep.resname, rep.chain, rep.resid, rep.asym) == ("86I", "D", "603", "P")
     assert rep.contact_chains == ["D"]
-    assert rep.ions and not rep.clean
+    assert rep.all_ions and not rep.ions  # the Mn ions are 13+ A away
+    assert rep.all_other_ligands and not rep.other_ligands and rep.clean
     assert rep.resolution == pytest.approx(2.07) and rep.rscc == pytest.approx(0.855)
 
 
